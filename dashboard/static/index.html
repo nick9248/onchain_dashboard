@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Institutional Options Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header class="header">
+        <div class="header-left">
+            <div class="logo"></div>
+            <h1>On-Chain Options Synthesis</h1>
+        </div>
+        <div class="timestamp" id="last-updated">Last Updated: ---</div>
+    </header>
+
+    <main class="dashboard" id="dashboard-grid">
+        <div class="loader" id="loader">
+            <div class="spinner"></div>
+            Fetching latest market data...
+        </div>
+    </main>
+
+    <template id="asset-card-template">
+        <div class="asset-card">
+            <div class="card-glow"></div>
+            <div class="asset-header">
+                <div class="asset-title">
+                    <h2 class="asset-name">--</h2>
+                    <span class="asset-badge">Live</span>
+                </div>
+                <div class="asset-price mono">--</div>
+            </div>
+
+            <div class="section synthesis-section">
+                <h3 class="section-title">Executive Synthesis</h3>
+                <div class="grid-2">
+                    <div class="metric">
+                        <span class="label">Market Regime</span>
+                        <span class="value regime-val">--</span>
+                    </div>
+                    <div class="metric">
+                        <span class="label">Directional Bias</span>
+                        <span class="value direction-val">--</span>
+                    </div>
+                    <div class="metric">
+                        <span class="label">Volatility State</span>
+                        <span class="value vol-val">--</span>
+                    </div>
+                     <div class="metric">
+                        <span class="label">Vol Premium (VRP)</span>
+                        <span class="value vrp-val">--</span>
+                    </div>
+                </div>
+                <div class="metric full-width mt-3">
+                    <span class="label">Primary Recommendation</span>
+                    <span class="value rec-val emphasis">--</span>
+                </div>
+            </div>
+
+            <div class="section">
+                <h3 class="section-title">Term Structure Bias</h3>
+                <div class="grid-2">
+                    <div class="metric">
+                        <span class="label">Near-Term (0-7 DTE)</span>
+                        <span class="value near-bias-val">--</span>
+                    </div>
+                    <div class="metric">
+                        <span class="label">Far-Term (30+ DTE)</span>
+                        <span class="value far-bias-val">--</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section">
+                <h3 class="section-title">Core Metrics</h3>
+                <div class="grid-3">
+                    <div class="metric">
+                        <span class="label">DVOL Index</span>
+                        <span class="value mono dvol-val">--</span>
+                    </div>
+                    <div class="metric">
+                        <span class="label">Funding Rate</span>
+                        <span class="value mono funding-val">--</span>
+                    </div>
+                    <div class="metric">
+                        <span class="label">P/C Ratio</span>
+                        <span class="value mono pc-val">--</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section gex-section">
+                <h3 class="section-title">Dealer Positioning (GEX/DEX)</h3>
+                <div class="grid-2 mb-3">
+                    <div class="metric">
+                        <span class="label">Gamma Environment</span>
+                        <span class="value gex-val">--</span>
+                    </div>
+                    <div class="metric">
+                        <span class="label">Delta Environment</span>
+                        <span class="value dex-val">--</span>
+                    </div>
+                </div>
+                
+                <div class="levels">
+                    <div class="level-box support">
+                        <span class="level-label">Top Put Support</span>
+                        <span class="level-value mono top-sup-val">--</span>
+                    </div>
+                    <div class="level-box resistance">
+                        <span class="level-label">Top Call Resistance</span>
+                        <span class="level-value mono top-res-val">--</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="section last-section">
+                 <h3 class="section-title">Nearest Expiration Target</h3>
+                 <div class="grid-2">
+                    <div class="metric">
+                        <span class="label">Expiration Date</span>
+                        <span class="value mono expiry-val">--</span>
+                    </div>
+                    <div class="metric">
+                        <span class="label">Max Pain Strike</span>
+                        <span class="value mono max-pain-val">--</span>
+                    </div>
+                 </div>
+            </div>
+        </div>
+    </template>
+
+    <script src="app.js"></script>
+</body>
+</html>
