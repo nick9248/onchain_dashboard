@@ -205,6 +205,13 @@ const Analysis = () => {
                             <div className="glass-card metric-box" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                                 <span className="card-title">DVOL Index</span>
                                 <span className="box-value mono text-primary-accent">{globalData.dvol || '--'}%</span>
+                                {globalData.expected_daily_move && (
+                                    <div style={{ marginTop: '0.5rem', fontSize: '0.75rem', color: '#94A3B8' }}>
+                                        <div>Daily Expected: {globalData.expected_daily_move}</div>
+                                        <div>Weekly Expected: {globalData.expected_weekly_move}</div>
+                                        <div>Monthly Expected: {globalData.expected_monthly_move}</div>
+                                    </div>
+                                )}
                             </div>
 
                             <div className="glass-card metric-box" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
@@ -241,6 +248,13 @@ const Analysis = () => {
                                     <span className="box-label">OI P/C</span>
                                     <span className="box-value mono" style={{ fontSize: '2rem' }}>{metrics.pc_ratio || '--'}</span>
                                     <span className={`box-sub ${metrics.pc_ratio < 1 ? 'text-bullish' : 'text-bearish'}`}>{metrics.pc_signal || '--'}</span>
+                                    {metrics.trend_pc && (
+                                        <div style={{ marginTop: '0.5rem', fontSize: '0.75rem', color: '#94A3B8', textAlign: 'right' }}>
+                                            <div>P/C: {metrics.trend_pc}</div>
+                                            <div>Calls: {metrics.trend_call_oi}</div>
+                                            <div>Puts: {metrics.trend_put_oi}</div>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -301,6 +315,12 @@ const Analysis = () => {
                                 <div className="metric-box" style={{ width: '40%', alignItems: 'flex-end', justifyContent: 'center', textAlign: 'right' }}>
                                     <span className="box-label">VOL P/C</span>
                                     <span className="box-value mono" style={{ fontSize: '2rem' }}>{metrics.vol_pc_ratio || '--'}</span>
+                                    {metrics.trend_vol_pc && (
+                                        <div style={{ marginTop: '0.5rem', fontSize: '0.75rem', color: '#94A3B8', textAlign: 'right' }}>
+                                            <div>Vol P/C: {metrics.trend_vol_pc}</div>
+                                            <div>Volume: {metrics.trend_volume}</div>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -408,12 +428,12 @@ const Analysis = () => {
                         <div style={{ display: 'flex', gap: '2rem', alignItems: 'center' }}>
                             <div className="metric-box" style={{ alignItems: 'flex-end' }}>
                                 <span className="box-label">Total Net GEX</span>
-                                <span className={`box-value mono ${metrics.total_net_gex > 0 ? 'text-bullish' : 'text-bearish'}`}>{(metrics.total_net_gex ? Number(metrics.total_net_gex).toLocaleString() : '--')}</span>
+                                <span className={`box-value mono ${metrics.total_net_gex > 0 ? 'text-bullish' : 'text-bearish'}`}>{(metrics.total_net_gex ? Number(metrics.total_net_gex).toLocaleString() + ' USD' : '--')}</span>
                             </div>
                             <span style={{ color: 'rgba(212,175,55,0.3)', fontSize: '1.5rem' }}>|</span>
                             <div className="metric-box" style={{ alignItems: 'flex-end' }}>
                                 <span className="box-label">Total Net DEX</span>
-                                <span className={`box-value mono ${metrics.total_net_dex > 0 ? 'text-bullish' : 'text-bearish'}`}>{(metrics.total_net_dex ? Number(metrics.total_net_dex).toLocaleString() : '--')}</span>
+                                <span className={`box-value mono ${metrics.total_net_dex > 0 ? 'text-bullish' : 'text-bearish'}`}>{(metrics.total_net_dex ? Number(metrics.total_net_dex).toLocaleString() + ' BTC' : '--')}</span>
                             </div>
                         </div>
                     </div>
@@ -496,6 +516,55 @@ const Analysis = () => {
                         </ResponsiveContainer>
                     </div>
                 </div>
+
+                {/* MARKET-WIDE SECTION */}
+                {globalData.market_total_net_gex && (
+                    <div className="glass-card g-col-full" style={{ background: 'linear-gradient(145deg, rgba(15, 23, 42, 0.8) 0%, rgba(11, 19, 43, 0.9) 100%)', border: '1px solid rgba(212, 175, 55, 0.3)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '1rem' }}>
+                            <div>
+                                <h3 className="card-title" style={{ margin: 0, border: 'none', color: '#D4AF37' }}>MARKET-WIDE GEX/DEX LEVELS</h3>
+                                <p className="mono" style={{ fontSize: '0.8rem', color: '#94A3B8', marginTop: '0.25rem' }}>(All Expirations Aggregated)</p>
+                            </div>
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
+                            {/* Key Levels */}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                <div style={{ color: '#E0E7FF', fontWeight: 600, fontSize: '0.9rem', marginBottom: '0.5rem', borderBottom: '1px dotted rgba(255,255,255,0.1)', paddingBottom: '0.5rem' }}>KEY AGGREGATED LEVELS</div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                    <span style={{ color: '#94A3B8' }}>Agg. Call Resistance:</span>
+                                    <span className="mono" style={{ color: '#EF4444' }}>${Number(globalData.market_gex_call_res).toLocaleString()}</span>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                    <span style={{ color: '#94A3B8' }}>Agg. Put Support:</span>
+                                    <span className="mono" style={{ color: '#10B981' }}>${Number(globalData.market_gex_put_sup).toLocaleString()}</span>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                    <span style={{ color: '#94A3B8' }}>Market HVL (Zero Gamma):</span>
+                                    <span className="mono" style={{ color: '#E0E7FF' }}>${Number(globalData.market_hvl_zero_gamma).toLocaleString()}</span>
+                                </div>
+                            </div>
+
+                            {/* Totals & Environments */}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                <div style={{ color: '#E0E7FF', fontWeight: 600, fontSize: '0.9rem', marginBottom: '0.5rem', borderBottom: '1px dotted rgba(255,255,255,0.1)', paddingBottom: '0.5rem' }}>OVERALL POSITIONING</div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                    <span style={{ color: '#94A3B8' }}>Total Net GEX:</span>
+                                    <span className={`mono ${globalData.market_total_net_gex > 0 ? 'text-bullish' : 'text-bearish'}`}>{(globalData.market_total_net_gex > 0 ? '+' : '')}{Number(globalData.market_total_net_gex).toLocaleString()} USD</span>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                    <span style={{ color: '#94A3B8' }}>Total Net DEX:</span>
+                                    <span className={`mono ${globalData.market_total_net_dex > 0 ? 'text-bullish' : 'text-bearish'}`}>{(globalData.market_total_net_dex > 0 ? '+' : '')}{Number(globalData.market_total_net_dex).toLocaleString()} BTC</span>
+                                </div>
+
+                                <div style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: '#94A3B8' }}>
+                                    <div style={{ marginBottom: '0.25rem' }}><strong style={{ color: '#E0E7FF' }}>GEX Env:</strong> {globalData.market_gex_env}</div>
+                                    <div><strong style={{ color: '#E0E7FF' }}>DEX Env:</strong> {globalData.market_dex_env}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* LARGE OI CHANGES AND MARKET METRICS COMBO */}
                 <div className="g-col-full" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 6fr) minmax(0, 3fr) minmax(0, 3fr)', gap: '1.5rem', marginTop: '2rem', alignItems: 'stretch' }}>

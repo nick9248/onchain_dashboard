@@ -77,6 +77,12 @@ def parse_report(filepath):
                 data["global"]["funding_rate"] = line_s.split("Current Funding Rate:")[1].split("(")[0].strip()
             elif "8h Funding Rate:" in line_s:
                 data["global"]["funding_rate_8h"] = line_s.split("8h Funding Rate:")[1].strip()
+            elif line_s.startswith("Expected Daily Move:"):
+                data["global"]["expected_daily_move"] = line_s.split("Expected Daily Move:")[1].strip()
+            elif line_s.startswith("Expected Weekly Move:"):
+                data["global"]["expected_weekly_move"] = line_s.split("Expected Weekly Move:")[1].strip()
+            elif line_s.startswith("Expected Monthly Move:"):
+                data["global"]["expected_monthly_move"] = line_s.split("Expected Monthly Move:")[1].strip()
             
             # Transition to expiry block
             elif line_s.startswith("EXPIRATION:"):
@@ -165,6 +171,12 @@ def parse_report(filepath):
                      if len(val_sig) >= 2:
                          current_expiry["metrics"]["pc_ratio"] = clean_num(val_sig[0])
                          current_expiry["metrics"]["pc_signal"] = val_sig[1].strip("()")
+            elif line_s.startswith("Trend (Call OI):"):
+                current_expiry["metrics"]["trend_call_oi"] = line_s.split("Trend (Call OI):")[1].strip()
+            elif line_s.startswith("Trend (Put OI):"):
+                current_expiry["metrics"]["trend_put_oi"] = line_s.split("Trend (Put OI):")[1].strip()
+            elif line_s.startswith("Trend (P/C):"):
+                current_expiry["metrics"]["trend_pc"] = line_s.split("Trend (P/C):")[1].strip()
                          
             # Volume Statistics
             if line_s.startswith("Total Call Volume:"):
@@ -175,6 +187,10 @@ def parse_report(filepath):
                 current_expiry["metrics"]["total_vol"] = clean_num(line_s.split(":")[1])
             elif line_s.startswith("Volume P/C Ratio:"):
                 current_expiry["metrics"]["vol_pc_ratio"] = clean_num(line_s.split(":")[1])
+            elif line_s.startswith("Trend (Volume):"):
+                current_expiry["metrics"]["trend_volume"] = line_s.split("Trend (Volume):")[1].strip()
+            elif line_s.startswith("Trend (Vol P/C):"):
+                current_expiry["metrics"]["trend_vol_pc"] = line_s.split("Trend (Vol P/C):")[1].strip()
             
             # GEX Key Levels summary
             if line_s.startswith("Call Resistance:"):
@@ -187,9 +203,9 @@ def parse_report(filepath):
                 m = re.search(r"\$([\d,]+)", line_s)
                 if m: current_expiry["metrics"]["hvl_zero_gamma"] = clean_num(m.group(1))
             elif line_s.startswith("Total Net GEX:"):
-                current_expiry["metrics"]["total_net_gex"] = clean_num(line_s.split(":")[1])
+                current_expiry["metrics"]["total_net_gex"] = clean_num(line_s.split("Total Net GEX:")[1].split("USD")[0])
             elif line_s.startswith("Total Net DEX:"):
-                current_expiry["metrics"]["total_net_dex"] = clean_num(line_s.split(":")[1])
+                current_expiry["metrics"]["total_net_dex"] = clean_num(line_s.split("Total Net DEX:")[1].split("BTC")[0])
                 
             # Tables and Block parsing states
             if line_s.startswith("OI Skew:"):
@@ -367,7 +383,24 @@ def parse_report(filepath):
                         
         # --- MARKET WIDE METRICS ---
         elif state == "MARKET_WIDE":
-            if "VRP:" in line_s and ("CHEAP" in line_s or "EXPENSIVE" in line_s or "FAIR" in line_s):
+            if line_s.startswith("Call Resistance:"):
+                m = re.search(r"\$([\d,]+)", line_s)
+                if m: data["global"]["market_gex_call_res"] = clean_num(m.group(1))
+            elif line_s.startswith("Put Support:"):
+                m = re.search(r"\$([\d,]+)", line_s)
+                if m: data["global"]["market_gex_put_sup"] = clean_num(m.group(1))
+            elif line_s.startswith("HVL (Zero Gamma):"):
+                m = re.search(r"\$([\d,]+)", line_s)
+                if m: data["global"]["market_hvl_zero_gamma"] = clean_num(m.group(1))
+            elif line_s.startswith("Total Net GEX:"):
+                data["global"]["market_total_net_gex"] = clean_num(line_s.split("Total Net GEX:")[1].split("USD")[0])
+            elif line_s.startswith("Total Net DEX:"):
+                data["global"]["market_total_net_dex"] = clean_num(line_s.split("Total Net DEX:")[1].split("BTC")[0])
+            elif line_s.startswith("GEX Environment:"):
+                data["global"]["market_gex_env"] = line_s.split("GEX Environment:")[1].strip()
+            elif line_s.startswith("DEX Environment:"):
+                data["global"]["market_dex_env"] = line_s.split("DEX Environment:")[1].strip()
+            elif "VRP:" in line_s and ("CHEAP" in line_s or "EXPENSIVE" in line_s or "FAIR" in line_s):
                 data["global"]["vrp_details"] = line_s.strip()
             elif "Perp OI:" in line_s:
                 data["global"]["perp_oi_details"] = line_s.strip()
