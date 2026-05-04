@@ -24,7 +24,10 @@ app = Flask(__name__, static_folder=FRONTEND_FOLDER, static_url_path='')
 # Enable CORS for the React development server bridging (optional for exe but good for dev)
 CORS(app)
 
-DATA_PATH = r"C:\Users\Nick\PycharmProjects\option_trading\output\data\onchain_analysis"
+DATA_PATH = os.environ.get(
+    "ONCHAIN_DATA_PATH",
+    os.path.join(os.path.dirname(__file__), "..", "data", "onchain_analysis")
+)
 
 def get_latest_report_dir(asset):
     base_path = os.path.join(DATA_PATH, asset, "report")
@@ -199,7 +202,7 @@ def parse_report(filepath):
             elif line_s.startswith("Put Support:"):
                 m = re.search(r"\$([\d,]+)", line_s)
                 if m: current_expiry["metrics"]["gex_put_sup"] = clean_num(m.group(1))
-            elif line_s.startswith("HVL (Zero Gamma):"):
+            elif line_s.startswith("Zero Gamma Level:") or line_s.startswith("HVL (Zero Gamma):"):
                 m = re.search(r"\$([\d,]+)", line_s)
                 if m: current_expiry["metrics"]["hvl_zero_gamma"] = clean_num(m.group(1))
             elif line_s.startswith("Total Net GEX:"):
@@ -220,7 +223,10 @@ def parse_report(filepath):
             elif "GEX/DEX BY STRIKE:" in line_s: table_parser_state = "GEX_TABLE_WAIT"
             elif "TOP 5 STRIKES BY BUYING PRESSURE:" in line_s: table_parser_state = "BUY_FLOW_WAIT"
             elif "TOP 5 STRIKES BY SELLING PRESSURE:" in line_s: table_parser_state = "SELL_FLOW_WAIT"
+            elif "VOLATILITY SURFACE ANALYSIS" in line_s: table_parser_state = "VOL_SURFACE_ACTIVE"
             elif "IV BY STRIKE:" in line_s: table_parser_state = "IV_SURFACE_WAIT"
+            elif "P/C RATIO BY MONEYNESS" in line_s: table_parser_state = "PC_MONEYNESS_ACTIVE"
+            elif "SECOND-ORDER GREEKS" in line_s: table_parser_state = "SECOND_ORDER_ACTIVE"
             elif "LARGE OI CHANGES" in line_s: table_parser_state = "LARGE_OI_CHANGE_WAIT"
             elif "MARKET-WIDE METRICS" in line_s: state = "MARKET_WIDE"
             
@@ -342,11 +348,46 @@ def parse_report(filepath):
                                 })
                         except: pass
             
+            elif table_parser_state == "VOL_SURFACE_ACTIVE":
+                # Parse 25-Delta Skew line
+                if line_s.startswith("25-Delta Skew:"):
+                    m = re.match(r"25-Delta Skew:\s*([+-]?[\d.]+%)\s*\(([^)]+)\)", line_s)
+                    if m:
+                        current_expiry["vol_surface"] = current_expiry.get("vol_surface", {})
+                        current_expiry["vol_surface"]["skew_25d"] = m.group(1)
+                        current_expiry["vol_surface"]["skew_25d_label"] = m.group(2)
+                elif line_s.startswith("25d Put:"):
+                    m = re.search(r"25d Put:\s*([\d.]+%)\s*\(K=([\d,]+)\).*25d Call:\s*([\d.]+%)\s*\(K=([\d,]+)\)", line_s)
+                    if m:
+                        vs = current_expiry.setdefault("vol_surface", {})
+                        vs["put_25d"] = m.group(1)
+                        vs["put_25d_strike"] = clean_num(m.group(2))
+                        vs["call_25d"] = m.group(3)
+                        vs["call_25d_strike"] = clean_num(m.group(4))
+                elif line_s.startswith("ATM IV:"):
+                    m = re.search(r"ATM IV:\s*([\d.]+%)", line_s)
+                    if m:
+                        current_expiry.setdefault("vol_surface", {})["atm_iv"] = m.group(1)
+                elif line_s.startswith("VWAP IV:"):
+                    m = re.search(r"VWAP IV:\s*([\d.]+%).*Mark IV:\s*([\d.]+%).*Diff:\s*([+-]?[\d.]+%)", line_s)
+                    if m:
+                        vs = current_expiry.setdefault("vol_surface", {})
+                        vs["vwap_iv"] = m.group(1)
+                        vs["mark_iv"] = m.group(2)
+                        vs["iv_diff"] = m.group(3)
+                elif "Sellers aggressive" in line_s or "Buyers aggressive" in line_s or "Balanced" in line_s:
+                    current_expiry.setdefault("vol_surface", {})["flow_label"] = line_s.strip()
+                elif line_s.startswith("IV BY STRIKE:"):
+                    table_parser_state = "IV_SURFACE_WAIT"
+
             elif table_parser_state == "IV_SURFACE_WAIT":
                 if "------" in line_s: table_parser_state = "IV_SURFACE_ACTIVE"
             elif table_parser_state == "IV_SURFACE_ACTIVE":
                  if not line_s or line_s.startswith("P/C RATIO"): 
-                    table_parser_state = None
+                    if line_s.startswith("P/C RATIO"):
+                        table_parser_state = "PC_MONEYNESS_ACTIVE"
+                    else:
+                        table_parser_state = None
                  else:
                     parts = line_s.split()
                     if len(parts) >= 3:
@@ -359,6 +400,39 @@ def parse_report(filepath):
                                     "put_iv": clean_num(parts[2])
                                 })
                         except: pass
+
+            elif table_parser_state == "PC_MONEYNESS_ACTIVE":
+                if not line_s or line_s.startswith("SECOND-ORDER") or line_s.startswith("LARGE OI"):
+                    if line_s.startswith("SECOND-ORDER"):
+                        table_parser_state = "SECOND_ORDER_ACTIVE"
+                    elif line_s.startswith("LARGE OI"):
+                        table_parser_state = "LARGE_OI_CHANGE_WAIT"
+                    else:
+                        table_parser_state = None
+                else:
+                    m = re.match(r"\s*(ATM|Near-OTM|Far-OTM)[^:]*:\s*P/C = ([\d.]+|N/A)\s*\(([^)]+)\)", line_s)
+                    if m:
+                        key = m.group(1).lower().replace("-", "_")
+                        pc_val = m.group(2)
+                        label = m.group(3)
+                        current_expiry.setdefault("pc_moneyness", {})[key] = {"ratio": pc_val, "label": label}
+
+            elif table_parser_state == "SECOND_ORDER_ACTIVE":
+                if not line_s or line_s.startswith("LARGE OI"):
+                    if line_s.startswith("LARGE OI"):
+                        table_parser_state = "LARGE_OI_CHANGE_WAIT"
+                    else:
+                        table_parser_state = None
+                else:
+                    sg = current_expiry.setdefault("second_order_greeks", {})
+                    if line_s.startswith("Net Vanna Exposure:"):
+                        sg["vanna"] = line_s.split(":")[1].strip()
+                    elif line_s.startswith("Net Charm Exposure:"):
+                        sg["charm"] = line_s.split(":")[1].strip()
+                    elif line_s.startswith("Vanna Signal:"):
+                        sg["vanna_signal"] = line_s.split(":")[1].strip()
+                    elif line_s.startswith("Charm Signal:"):
+                        sg["charm_signal"] = line_s.split(":")[1].strip()
             
             elif table_parser_state == "LARGE_OI_CHANGE_WAIT":
                 if "------" in line_s: table_parser_state = "LARGE_OI_CHANGE_ACTIVE"
@@ -389,7 +463,7 @@ def parse_report(filepath):
             elif line_s.startswith("Put Support:"):
                 m = re.search(r"\$([\d,]+)", line_s)
                 if m: data["global"]["market_gex_put_sup"] = clean_num(m.group(1))
-            elif line_s.startswith("HVL (Zero Gamma):"):
+            elif line_s.startswith("Zero Gamma Level:") or line_s.startswith("HVL (Zero Gamma):"):
                 m = re.search(r"\$([\d,]+)", line_s)
                 if m: data["global"]["market_hvl_zero_gamma"] = clean_num(m.group(1))
             elif line_s.startswith("Total Net GEX:"):
@@ -400,12 +474,54 @@ def parse_report(filepath):
                 data["global"]["market_gex_env"] = line_s.split("GEX Environment:")[1].strip()
             elif line_s.startswith("DEX Environment:"):
                 data["global"]["market_dex_env"] = line_s.split("DEX Environment:")[1].strip()
-            elif "VRP:" in line_s and ("CHEAP" in line_s or "EXPENSIVE" in line_s or "FAIR" in line_s):
+            elif "VRP:" in line_s and "DVOL:" in line_s:
                 data["global"]["vrp_details"] = line_s.strip()
             elif "Perp OI:" in line_s:
                 data["global"]["perp_oi_details"] = line_s.strip()
-            elif "8h Funding:" in line_s and not "8h Funding Rate" in line_s:
+            elif "8h Funding:" in line_s and "8h Funding Rate" not in line_s:
                 data["global"]["perp_funding_details"] = line_s.strip()
+            # IV Term Structure table
+            elif "IV TERM STRUCTURE" in line_s:
+                table_parser_state = "TERM_STRUCT_WAIT"
+            elif table_parser_state == "TERM_STRUCT_WAIT":
+                if "------" in line_s: table_parser_state = "TERM_STRUCT_ACTIVE"
+            elif table_parser_state == "TERM_STRUCT_ACTIVE":
+                if not line_s or line_s.startswith("Structure:"):
+                    if line_s.startswith("Structure:"):
+                        m = re.search(r"Structure:\s*(.*)", line_s)
+                        if m: data["global"]["term_structure_label"] = m.group(1).strip()
+                    table_parser_state = None
+                else:
+                    parts = line_s.split()
+                    if len(parts) >= 3:
+                        try:
+                            dte = int(parts[1])
+                            atm_iv = parts[2].replace('%', '')
+                            data["global"].setdefault("iv_term_structure", []).append({
+                                "expiration": parts[0],
+                                "dte": dte,
+                                "atm_iv": float(atm_iv)
+                            })
+                        except: pass
+            # Futures Basis table
+            elif "FUTURES BASIS" in line_s:
+                table_parser_state = "FUTURES_BASIS_WAIT"
+            elif table_parser_state == "FUTURES_BASIS_WAIT":
+                if "------" in line_s: table_parser_state = "FUTURES_BASIS_ACTIVE"
+            elif table_parser_state == "FUTURES_BASIS_ACTIVE":
+                if not line_s:
+                    table_parser_state = None
+                else:
+                    # Format: BTC-20MAR26  $     74,222  $     74,198  3.9%
+                    m = re.match(r"(\S+)\s+\$\s*([\d,]+)\s+\$\s*([\d,]+)\s+([+-]?[\d.]+%)", line_s)
+                    if m:
+                        data["global"].setdefault("futures_basis", []).append({
+                            "future": m.group(1),
+                            "price": clean_num(m.group(2)),
+                            "spot": clean_num(m.group(3)),
+                            "ann_premium": m.group(4)
+                        })
+            # Block Trades table
             elif table_parser_state == "BLOCK_TRADES_WAIT" or "BLOCK TRADES" in line_s:
                 table_parser_state = "BLOCK_TRADES_WAIT"
                 if "------" in line_s: table_parser_state = "BLOCK_TRADES_ACTIVE"
@@ -413,15 +529,20 @@ def parse_report(filepath):
                  if not line_s or "CROSS-ASSET" in line_s or "=====" in line_s:
                      table_parser_state = None
                  else:
-                     parts = line_s.split()
-                     if len(parts) >= 6:
+                     # Use regex to handle variable spacing around $ notional
+                     # Format: 20:10:30  BTC-27MAR26-62000-P  100.0  buy  $    7,434,103  69.9%
+                     m = re.match(
+                         r"(\d{2}:\d{2}:\d{2})\s+(\S+)\s+([\d.]+)\s+(\w+)\s+\$\s*([\d,]+)\s+([\d.]+%)",
+                         line_s
+                     )
+                     if m:
                          data["global"].setdefault("block_trades", []).append({
-                             "time": parts[0],
-                             "instrument": parts[1],
-                             "size": parts[2],
-                             "dir": parts[3],
-                             "notional": clean_num(parts[5]) if len(parts) > 5 else None,
-                             "iv": parts[-1]
+                             "time": m.group(1),
+                             "instrument": m.group(2),
+                             "size": m.group(3),
+                             "dir": m.group(4),
+                             "notional": clean_num(m.group(5)),
+                             "iv": m.group(6)
                          })
 
     # Sort expirations by date
@@ -448,9 +569,30 @@ def parse_synthesis(filepath):
 
     vol_m = re.search(r"Vol:\s*([^\|\n]+)", content)
     if vol_m: data['volatility'] = vol_m.group(1).strip()
-    
-    vrp_m = re.search(r"VRP:\s*([^\|\n]+)", content)
-    if vrp_m: data['vrp'] = vrp_m.group(1).strip()
+
+    # --- Vol metrics banner row (between the two ─── separators) ---
+    # DVOL line
+    dvol_m = re.search(r"DVOL:\s*([\d.]+%)\s*\|\s*IV Pctile:\s*([^\|\n]+)\|\s*ATM IV \(front\):\s*~?([\d.%]+)", content)
+    if dvol_m:
+        data['banner_dvol'] = dvol_m.group(1).strip()
+        data['banner_iv_pctile'] = dvol_m.group(2).strip()
+        data['banner_atm_iv'] = dvol_m.group(3).strip()
+    # RV line
+    rv_m = re.search(r"10d RV:\s*([\d.]+%)\s*\|\s*20d RV:\s*([\d.]+%)\s*\|\s*30d RV:\s*([^\n]+)", content)
+    if rv_m:
+        data['banner_rv_10d'] = rv_m.group(1).strip()
+        data['banner_rv_20d'] = rv_m.group(2).strip()
+        data['banner_rv_30d'] = rv_m.group(3).strip()
+    # VRP + Term Structure line
+    vrp_ts_m = re.search(r"VRP:\s*([^\|\n]+)\|\s*Term Structure:\s*([^\n]+)", content)
+    if vrp_ts_m:
+        data['vrp'] = vrp_ts_m.group(1).strip()
+        data['term_structure'] = vrp_ts_m.group(2).strip()
+    # Funding line
+    funding_m = re.search(r"Perp Funding:\s*([^\|\n]+)\|\s*8h:\s*([^\n]+)", content)
+    if funding_m:
+        data['banner_funding'] = funding_m.group(1).strip()
+        data['banner_funding_8h'] = funding_m.group(2).strip()
 
     near_m = re.search(r"NEAR-TERM[^:]*:\s*([A-Z]+) bias", content)
     if near_m: data['near_term_bias'] = near_m.group(1).strip()
@@ -461,12 +603,18 @@ def parse_synthesis(filepath):
     mid_m = re.search(r"MID-TERM[^:]*:\s*([A-Z]+) bias", content)
     if mid_m: data['mid_term_bias'] = mid_m.group(1).strip()
 
+    # Narrative paragraph: text between second ─── separator and "NEAR-TERM"
+    # The synthesis file uses ────...──── as separators (unicode em dashes)
+    narrative_m = re.search(r'\u2500{10,}\s*\n\n(.+?)\n\nNEAR-TERM', content, re.DOTALL)
+    if narrative_m:
+        data['narrative'] = narrative_m.group(1).strip().replace('\n', ' ')
+
     # Vol Assessment
-    vol_ass_m = re.search(r"VOL ASSESSMENT:\s*(.*?)(?=\n\n|\n[A-Z]+)", content, re.DOTALL)
+    vol_ass_m = re.search(r"VOL ASSESSMENT:\s*(.*?)(?=\n\n|\nRISK)", content, re.DOTALL)
     if vol_ass_m: data['vol_assessment'] = vol_ass_m.group(1).strip().replace('\n', ' ')
 
     # Risk Factors
-    rf_m = re.search(r"RISK FACTORS:\s*(.*?)(?=\n\n|\n[A-Z]+)", content, re.DOTALL)
+    rf_m = re.search(r"RISK FACTORS:\s*(.*?)(?=\n\n|\nINSTITUTIONAL)", content, re.DOTALL)
     if rf_m: data['risk_factors'] = rf_m.group(1).strip().replace('\n', ' ')
 
     # Block Trades Extraction
@@ -475,8 +623,38 @@ def parse_synthesis(filepath):
         data['block_trades_summary'] = block_m.group(1).strip()
         data['block_trades_largest'] = block_m.group(2).strip()
 
-    recommendation_m = re.search(r"TRADE RECOMMENDATIONS:\s*\n?PRIMARY — ([^\n]+)", content)
-    if recommendation_m: data['primary_recommendation'] = recommendation_m.group(1).strip()
+    # Trade Recommendations — capture all lines (PRIMARY or SECONDARY)
+    recs = re.findall(r"(?:PRIMARY|SECONDARY) — ([^\n]+)", content)
+    if recs:
+        data['trade_recommendations'] = recs  # list of rec strings
+        # Keep primary_recommendation for backward compat
+        data['primary_recommendation'] = recs[0] if recs else None
+
+    # Scoring Detail block
+    scoring_m = re.search(r"SCORING DETAIL:\s*\n(.*?)(?=\n\n|\Z)", content, re.DOTALL)
+    if scoring_m:
+        data['scoring_detail'] = scoring_m.group(1).strip()
+        # Also parse individual scoring fields
+        for line in scoring_m.group(1).splitlines():
+            line = line.strip()
+            if line.startswith("Direction:"):
+                data['score_direction'] = line.split("Direction:")[1].strip()
+            elif line.startswith("Fragility:"):
+                data['score_fragility'] = line.split("Fragility:")[1].strip()
+            elif line.startswith("Near-term:"):
+                m2 = re.search(r"Near-term:\s*([^|]+)\|\s*Far-term:\s*(.*)", line)
+                if m2:
+                    data['score_near_term'] = m2.group(1).strip()
+                    data['score_far_term'] = m2.group(2).strip()
+            elif line.startswith("Vol Regime:"):
+                data['score_vol_regime'] = line.split("Vol Regime:")[1].strip()
+            elif line.startswith("Market Regime:"):
+                data['score_market_regime'] = line.split("Market Regime:")[1].strip()
+            elif line.startswith("Effective VRP:"):
+                m2 = re.search(r"Effective VRP:\s*([^|]+)\|\s*Skew:\s*(.*)", line)
+                if m2:
+                    data['score_vrp'] = m2.group(1).strip()
+                    data['score_skew'] = m2.group(2).strip()
 
     return data
 

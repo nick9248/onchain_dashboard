@@ -18,3 +18,9 @@ dist/
 
 # Environment variables
 .env
+
+# AI assistant context files
+CLAUDE.md
+ANTIGRAVITY.md
+docs/superpowers/
+.claude/
